@@ -60,16 +60,50 @@ export default function Component() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowTyping(true)
+
+      // النص الأول الذي سيتم كتابته ثم مسحه
+      const firstText = "بقالة هي...الله يهديك😔"
+      // النص النهائي
+      const finalText = "ايه نعم اكيد!"
+
       let index = 0
-      const typingInterval = setInterval(() => {
-        if (index < fullText.length) {
-          setTypedText(fullText.slice(0, index + 1))
+
+      // المرحلة الأولى: كتابة النص الأول
+      const firstTypingInterval = setInterval(() => {
+        if (index < firstText.length) {
+          setTypedText(firstText.slice(0, index + 1))
           index++
         } else {
-          clearInterval(typingInterval)
+          clearInterval(firstTypingInterval)
+
+          // انتظار قليل قبل المسح
           setTimeout(() => {
-            setShowButton(true)
-          }, 500)
+            let eraseIndex = firstText.length
+
+            // المرحلة الثانية: مسح النص الأول بسرعة
+            const eraseInterval = setInterval(() => {
+              if (eraseIndex > 0) {
+                setTypedText(firstText.slice(0, eraseIndex - 1))
+                eraseIndex--
+              } else {
+                clearInterval(eraseInterval)
+
+                // المرحلة الثالثة: كتابة النص النهائي
+                let finalIndex = 0
+                const finalTypingInterval = setInterval(() => {
+                  if (finalIndex < finalText.length) {
+                    setTypedText(finalText.slice(0, finalIndex + 1))
+                    finalIndex++
+                  } else {
+                    clearInterval(finalTypingInterval)
+                    setTimeout(() => {
+                      setShowButton(true)
+                    }, 500)
+                  }
+                }, 100)
+              }
+            }, 50) // مسح أسرع
+          }, 800) // انتظار 800ms قبل المسح
         }
       }, 100)
     }, 2000)
@@ -881,7 +915,7 @@ export default function Component() {
               className="hover:text-blue-800 transition-colors duration-200 transform hover:scale-105 inline-flex items-center justify-center text-[rgba(79,70,229,1)]"
               style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
             >
-              تواصل معي واتس اب   
+              تواصل معي واتس اب
             </a>
           </div>
         </div>
@@ -962,13 +996,13 @@ export default function Component() {
               قريب بضيف خدمات متنوعة
             </h3>
             <p className="text-gray-600 mb-6" style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}>
-              يعني ترقب✨ 
+              يعني ترقب✨
             </p>
 
             {/* Social Media Links */}
             <div className="border-t pt-4">
               <p className="text-gray-500 text-sm mb-4" style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}>
-                بتلاقيني هنا 
+                بتلاقيني هنا
               </p>
               <div className="flex justify-center items-center gap-4">
                 <a
