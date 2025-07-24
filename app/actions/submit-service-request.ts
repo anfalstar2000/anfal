@@ -2,19 +2,18 @@
 
 import { createClient } from "@supabase/supabase-js"
 
-// Define the shape of the form data with optional fields as string | null
+// Define the shape of the form data with all fields now required
 interface ServiceRequestData {
   name: string
   contact: string
   serviceType: string
-  projectGoal: string | null // أصبح اختياريًا
-  hasIdentity: string | null // أصبح اختياريًا
-  budget: string | null // أصبح اختياريًا
-  deadline: string | null // أصبح اختياريًا
-  notes: string | null // أصبح اختياريًا
+  projectGoal: string
+  hasIdentity: string
+  budget: string
+  deadline: string
+  notes: string
 }
 
-// قم بتغيير توقيع الدالة لاستقبال الحالة السابقة وكائن FormData
 export async function submitServiceRequest(previousState: any, formData: FormData) {
   console.log("Server action 'submitServiceRequest' called.")
   console.log("Previous state (from useActionState):", previousState)
@@ -23,11 +22,11 @@ export async function submitServiceRequest(previousState: any, formData: FormDat
   const name = formData.get("name") as string
   const contact = formData.get("contact") as string
   const serviceType = formData.get("serviceType") as string
-  const projectGoal = (formData.get("projectGoal") as string) || null // أصبح اختياريًا
-  const hasIdentity = (formData.get("hasIdentity") as string) || null // أصبح اختياريًا
-  const budget = (formData.get("budget") as string) || null // أصبح اختياريًا
-  const deadline = (formData.get("deadline") as string) || null // أصبح اختياريًا
-  const notes = (formData.get("notes") as string) || null // أصبح اختياريًا
+  const projectGoal = formData.get("projectGoal") as string
+  const hasIdentity = formData.get("hasIdentity") as string
+  const budget = formData.get("budget") as string
+  const deadline = formData.get("deadline") as string
+  const notes = formData.get("notes") as string
 
   const requestData: ServiceRequestData = {
     name,
@@ -50,32 +49,28 @@ export async function submitServiceRequest(previousState: any, formData: FormDat
 
   console.log("Supabase client created.")
 
-  // Create a Supabase client for server-side operations
-  // Using the service_role key to bypass RLS for inserts if needed
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
-      persistSession: false, // No session persistence on server
+      persistSession: false,
     },
   })
 
   try {
-    // Insert data into the service_requests table
     const { data, error } = await supabase.from("service_requests").insert([
       {
         name: requestData.name,
         contact: requestData.contact,
         service_type: requestData.serviceType,
-        project_goal: requestData.projectGoal, // سيتم إرسال null إذا كان فارغًا
-        has_identity: requestData.hasIdentity, // سيتم إرسال null إذا كان فارغًا
-        budget: requestData.budget, // سيتم إرسال null إذا كان فارغًا
-        deadline: requestData.deadline, // سيتم إرسال null إذا كان فارغًا
-        notes: requestData.notes, // سيتم إرسال null إذا كان فارغًا
+        project_goal: requestData.projectGoal,
+        has_identity: requestData.hasIdentity,
+        budget: requestData.budget,
+        deadline: requestData.deadline,
+        notes: requestData.notes,
       },
     ])
 
     if (error) {
       console.error("Supabase insert error:", error)
-      // Use error.code for specific error identification [^1]
       return { success: false, message: `حدث خطأ أثناء إرسال طلبك: ${error.message}` }
     }
 

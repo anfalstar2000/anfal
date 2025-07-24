@@ -2,7 +2,7 @@
 import { Moon, X, Sun, Instagram } from "lucide-react"
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useTransition } from "react"
 import { useActionState } from "react"
 import { submitServiceRequest } from "./app/actions/submit-service-request"
 
@@ -28,18 +28,32 @@ export default function Component() {
   const [showWhatsappContactModal, setShowWhatsappContactModal] = useState(false)
   const fullText = "ايه نعم اكيد!"
   const [currentStep, setCurrentStep] = useState(1)
-  const totalSteps = 4
+  const totalSteps = 3
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({})
+  const [showServicesModal, setShowServicesModal] = useState(false)
 
   const [state, formAction, isPending] = useActionState(submitServiceRequest, {
     success: false,
     message: "",
   })
+  const [isTransitionPending, startTransition] = useTransition()
 
   useEffect(() => {
-    if (state.success || state.message) {
+    if (state.success) {
       setShowModal(false)
       setShowConfirmation(true)
+      setFormData({
+        name: "",
+        contact: "",
+        serviceType: "",
+        projectGoal: "",
+        hasIdentity: "",
+        budget: "",
+        deadline: "",
+        notes: "",
+      })
+      setCurrentStep(1)
+      setValidationErrors({})
     }
   }, [state])
 
@@ -81,34 +95,39 @@ export default function Component() {
       case "serviceType":
         if (!value) error = "نوع الخدمة مطلوب."
         break
+      case "projectGoal":
+        if (!value.trim()) error = "هدف المشروع مطلوب."
+        break
+      case "hasIdentity":
+        if (!value) error = "تحديد الهوية البصرية مطلوب."
+        break
+      case "budget":
+        if (!value) error = "الميزانية مطلوبة."
+        break
+      case "deadline":
+        if (!value) error = "تاريخ التسليم مطلوب."
+        break
+      case "notes":
+        if (!value.trim()) error = "الملاحظات مطلوبة."
+        break
       default:
         break
     }
     return error
   }
 
-  // دالة جديدة للتحقق من جميع الحقول الإلزامية قبل الإرسال النهائي
   const validateAllRequiredFields = (): boolean => {
     const errors: { [key: string]: string } = {}
     let isValid = true
 
-    // حقول الخطوة 1
-    const nameError = validateField("name", formData.name)
-    if (nameError) {
-      errors.name = nameError
-      isValid = false
-    }
-    const contactError = validateField("contact", formData.contact)
-    if (contactError) {
-      errors.contact = contactError
-      isValid = false
-    }
-
-    // حقول الخطوة 2
-    const serviceTypeError = validateField("serviceType", formData.serviceType)
-    if (serviceTypeError) {
-      errors.serviceType = serviceTypeError
-      isValid = false
+    // Validate all fields
+    for (const key in formData) {
+      const fieldName = key as keyof typeof formData
+      const error = validateField(fieldName, formData[fieldName])
+      if (error) {
+        errors[fieldName] = error
+        isValid = false
+      }
     }
 
     setValidationErrors(errors)
@@ -116,7 +135,6 @@ export default function Component() {
   }
 
   const handleNext = () => {
-    // التحقق من صحة الحقول في الخطوة الحالية فقط للانتقال
     const errors: { [key: string]: string } = {}
     let isValid = true
 
@@ -137,8 +155,33 @@ export default function Component() {
         errors.serviceType = serviceTypeError
         isValid = false
       }
+      const projectGoalError = validateField("projectGoal", formData.projectGoal)
+      if (projectGoalError) {
+        errors.projectGoal = projectGoalError
+        isValid = false
+      }
+      const hasIdentityError = validateField("hasIdentity", formData.hasIdentity)
+      if (hasIdentityError) {
+        errors.hasIdentity = hasIdentityError
+        isValid = false
+      }
+    } else if (currentStep === 3) {
+      const budgetError = validateField("budget", formData.budget)
+      if (budgetError) {
+        errors.budget = budgetError
+        isValid = false
+      }
+      const deadlineError = validateField("deadline", formData.deadline)
+      if (deadlineError) {
+        errors.deadline = deadlineError
+        isValid = false
+      }
+      const notesError = validateField("notes", formData.notes)
+      if (notesError) {
+        errors.notes = notesError
+        isValid = false
+      }
     }
-    // لا حاجة للتحقق من الحقول الاختيارية هنا
 
     setValidationErrors(errors)
 
@@ -147,23 +190,40 @@ export default function Component() {
     }
   }
 
-  // تم تعديل هذه الدالة لتكون متزامنة وتتعامل مع التحقق من صحة العميل
   const handleSubmit = (e: React.FormEvent) => {
-    if (!validateAllRequiredFields()) {
-      e.preventDefault() // منع إرسال النموذج إذا فشل التحقق من صحة العميل
-      // إذا كانت هناك أخطاء في الخطوة 1 أو 2، ارجع إلى تلك الخطوة
+    e.preventDefault() // منع الإرسال الافتراضي للنموذج دائمًا
+
+    // تأكد أن الإرسال يتم فقط عند الضغط على زر الإرسال في الخطوة الأخيرة
+    if (currentStep !== totalSteps) {
+      console.log("Attempted submission from non-final step. Blocked.")
+      return // لا تفعل شيئًا إذا لم نكن في الخطوة الأخيرة
+    }
+
+    console.log("Attempting final submission from step", currentStep)
+
+    if (validateAllRequiredFields()) {
+      const data = new FormData()
+      for (const key in formData) {
+        const value = formData[key as keyof typeof formData]
+        data.append(key, value) // أضف جميع القيم، حتى لو كانت فارغة (سيتم التعامل معها بواسطة التحقق من الصحة)
+      }
+      startTransition(() => {
+        formAction(data)
+      })
+    } else {
+      // إذا فشل التحقق في الخطوة الأخيرة، أعد المستخدم إلى الخطوة التي تحتوي على أخطاء
       if (validationErrors.name || validationErrors.contact) {
         setCurrentStep(1)
-      } else if (validationErrors.serviceType) {
+      } else if (validationErrors.serviceType || validationErrors.projectGoal || validationErrors.hasIdentity) {
         setCurrentStep(2)
+      } else if (validationErrors.budget || validationErrors.deadline || validationErrors.notes) {
+        setCurrentStep(3)
       }
     }
-    // إذا نجح التحقق، سيتم إرسال النموذج بشكل طبيعي إلى formAction
   }
 
   const handleInputChange = (field: keyof typeof formData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
-    // Clear error for the field as user types
     setValidationErrors((prev) => {
       const newErrors = { ...prev }
       delete newErrors[field]
@@ -184,18 +244,20 @@ export default function Component() {
       if (event.key === "Escape" && showWhatsappContactModal) {
         setShowWhatsappContactModal(false)
       }
+      if (event.key === "Escape" && showServicesModal) {
+        setShowServicesModal(false)
+      }
     }
 
     document.addEventListener("keydown", handleEscKey)
     return () => document.removeEventListener("keydown", handleEscKey)
-  }, [showExitConfirmation, showWhatsappContactModal])
+  }, [showExitConfirmation, showWhatsappContactModal, showServicesModal])
 
   const handleModalClose = () => {
     setShowModal(false)
     setCurrentStep(1)
-    setValidationErrors({}) // Clear errors on modal close
+    setValidationErrors({})
     setFormData({
-      // Reset form data
       name: "",
       contact: "",
       serviceType: "",
@@ -208,12 +270,18 @@ export default function Component() {
   }
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? "bg-gray-900" : "bg-white"}`} dir="rtl">
+    <div
+      className={`h-2 rounded-full transition-all duration-300 bg-[rgba(79,70,229,1)] ${isDarkMode ? "bg-gray-900" : "bg-white"}`}
+      dir="rtl"
+    >
       {/* Top Browser Bar */}
       <div className="bg-gray-100 border-gray-300 px-4 py-3 flex items-center justify-between">
         {/* Left Side - Avatar and Controls */}
         <div className="flex items-center space-x-3 space-x-reverse">
-          <div className="w-8 h-8 rounded-full overflow-hidden">
+          <div
+            className="w-8 h-8 rounded-full overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"
+            onClick={() => setShowServicesModal(true)}
+          >
             <img src="/anfal-avatar.png" alt="Anfal" className="w-full h-full object-cover" />
           </div>
           <button
@@ -264,7 +332,7 @@ export default function Component() {
               className="text-gray-800 font-medium text-lg text-right"
               style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif", fontWeight: 500 }}
             >
-              كلاينت جديد 
+              كلاينت جديد
             </span>
           </div>
 
@@ -351,300 +419,339 @@ export default function Component() {
             <div className="px-6 py-4">
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  className="h-2 rounded-full transition-all duration-300 bg-slate-600"
                   style={{ width: `${(currentStep / totalSteps) * 100}%` }}
                 ></div>
               </div>
             </div>
 
             {/* Modal Content */}
-            <form action={formAction} onSubmit={handleSubmit} className="p-6">
+            <form onSubmit={handleSubmit} className="p-6">
               {/* Step 1: Basic Info */}
-              {currentStep === 1 && (
-                <div className="space-y-4">
-                  <h3
-                    className="text-lg font-bold text-gray-800 mb-4"
+              <div
+                className="space-y-4 transition-all duration-300 ease-in-out"
+                style={{
+                  opacity: currentStep === 1 ? 1 : 0,
+                  height: currentStep === 1 ? "auto" : 0,
+                  overflow: currentStep === 1 ? "visible" : "hidden",
+                  position: currentStep === 1 ? "relative" : "absolute", // للحفاظ على المساحة
+                  width: "100%",
+                }}
+              >
+                <h3
+                  className="text-lg font-bold text-gray-800 mb-4"
+                  style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                >
+                  المعلومات الأساسية
+                </h3>
+
+                <div>
+                  <label
+                    className="block text-gray-700 font-medium mb-2 text-sm"
                     style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                   >
-                    المعلومات الأساسية
-                  </h3>
-
-                  <div>
-                    <label
-                      className="block text-gray-700 font-medium mb-2 text-sm"
+                    وش اسمك ؟ *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    required
+                    value={formData.name}
+                    onChange={(e) => handleInputChange("name", e.target.value)}
+                    placeholder="مثلاً: سارة أو محمد"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm ${
+                      validationErrors.name
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    }`}
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  />
+                  {validationErrors.name && (
+                    <p
+                      className="text-red-500 text-xs mt-1 text-right"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      وش اسمك ؟ *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => handleInputChange("name", e.target.value)}
-                      placeholder="مثلاً: سارة أو محمد"
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm ${
-                        validationErrors.name
-                          ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      }`}
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    />
-                    {validationErrors.name && (
-                      <p
-                        className="text-red-500 text-xs mt-1 text-right"
-                        style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                      >
-                        {validationErrors.name}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label
-                      className="block text-gray-700 font-medium mb-2 text-sm"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    >
-                      كيف أقدر أتواصل معك؟ *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.contact}
-                      onChange={(e) => handleInputChange("contact", e.target.value)}
-                      placeholder="إيميلك أو رقم الواتساب"
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm ${
-                        validationErrors.contact
-                          ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      }`}
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    />
-                    {validationErrors.contact && (
-                      <p
-                        className="text-red-500 text-xs mt-1 text-right"
-                        style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                      >
-                        {validationErrors.contact}
-                      </p>
-                    )}
-                  </div>
+                      {validationErrors.name}
+                    </p>
+                  )}
                 </div>
-              )}
+
+                <div>
+                  <label
+                    className="block text-gray-700 font-medium mb-2 text-sm"
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  >
+                    كيف أقدر أتواصل معك؟ *
+                  </label>
+                  <input
+                    type="text"
+                    name="contact"
+                    required
+                    value={formData.contact}
+                    onChange={(e) => handleInputChange("contact", e.target.value)}
+                    placeholder="إيميلك أو رقم الواتساب"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm ${
+                      validationErrors.contact
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    }`}
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  />
+                  {validationErrors.contact && (
+                    <p
+                      className="text-red-500 text-xs mt-1 text-right"
+                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                    >
+                      {validationErrors.contact}
+                    </p>
+                  )}
+                </div>
+              </div>
 
               {/* Step 2: Service Details */}
-              {currentStep === 2 && (
-                <div className="space-y-4">
-                  <h3
-                    className="text-lg font-bold text-gray-800 mb-4"
+              <div
+                className="space-y-4 transition-all duration-300 ease-in-out"
+                style={{
+                  opacity: currentStep === 2 ? 1 : 0,
+                  height: currentStep === 2 ? "auto" : 0,
+                  overflow: currentStep === 2 ? "visible" : "hidden",
+                  position: currentStep === 2 ? "relative" : "absolute",
+                  width: "100%",
+                }}
+              >
+                <h3
+                  className="text-lg font-bold text-gray-800 mb-4"
+                  style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                >
+                  تفاصيل الخدمة
+                </h3>
+
+                <div>
+                  <label
+                    className="block text-gray-700 font-medium mb-2 text-sm"
                     style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                   >
-                    تفاصيل الخدمة
-                  </h3>
-
-                  <div>
-                    <label
-                      className="block text-gray-700 font-medium mb-2 text-sm"
+                    وش نوع الخدمة اللي تحتاجها؟ *
+                  </label>
+                  <select
+                    name="serviceType"
+                    required
+                    value={formData.serviceType}
+                    onChange={(e) => handleInputChange("serviceType", e.target.value)}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm bg-white ${
+                      validationErrors.serviceType
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    }`}
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  >
+                    <option value="">اختر نوع الخدمة</option>
+                    <option value="mobile-app-ui">تصميم واجهة تطبيق (موبايل)</option>
+                    <option value="website-ui">تصميم واجهة موقع إلكتروني</option>
+                    <option value="ux-improvement">تحسين تجربة مستخدم لمشروعك</option>
+                    <option value="single-screen-design">تصميم شاشة وحدة (Landing page أو Dashboard)</option>
+                    <option value="not-sure-talk-first">مو عارف بالضبط.. نحتاج نتكلم أول</option>
+                  </select>
+                  {validationErrors.serviceType && (
+                    <p
+                      className="text-red-500 text-xs mt-1 text-right"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      وش نوع الخدمة اللي تحتاجها؟ *
-                    </label>
-                    <select
-                      required
-                      value={formData.serviceType}
-                      onChange={(e) => handleInputChange("serviceType", e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm bg-white ${
-                        validationErrors.serviceType
-                          ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      }`}
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    >
-                      <option value="">اختر نوع الخدمة</option>
-                      <option value="mobile-app-ui">تصميم واجهة تطبيق (موبايل)</option>
-                      <option value="website-ui">تصميم واجهة موقع إلكتروني</option>
-                      <option value="ux-improvement">تحسين تجربة مستخدم لمشروعك</option>
-                      <option value="single-screen-design">تصميم شاشة وحدة (Landing page أو Dashboard)</option>
-                      <option value="not-sure-talk-first">مو عارف بالضبط.. نحتاج نتكلم أول</option>
-                    </select>
-                    {validationErrors.serviceType && (
-                      <p
-                        className="text-red-500 text-xs mt-1 text-right"
-                        style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                      >
-                        {validationErrors.serviceType}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label
-                      className="block text-gray-700 font-medium mb-2 text-sm"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    >
-                      وش هدف المشروع؟
-                    </label>
-                    <textarea
-                      value={formData.projectGoal}
-                      onChange={(e) => handleInputChange("projectGoal", e.target.value)}
-                      placeholder="تكلم عن فكرتك بإيجاز (اختياري)"
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-right resize-none text-sm"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      className="block text-gray-700 font-medium mb-3 text-sm"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    >
-                      عندك هوية بصرية جاهزة؟
-                    </label>
-                    <div className="flex gap-4">
-                      {["نعم", "لا", "مو متأكد"].map((option) => (
-                        <label key={option} className="flex items-center cursor-pointer">
-                          <input
-                            type="radio"
-                            name="hasIdentity"
-                            value={option}
-                            checked={formData.hasIdentity === option}
-                            onChange={(e) => handleInputChange("hasIdentity", e.target.value)}
-                            className="ml-2"
-                          />
-                          <span className="text-sm" style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}>
-                            {option}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                      {validationErrors.serviceType}
+                    </p>
+                  )}
                 </div>
-              )}
+
+                <div>
+                  <label
+                    className="block text-gray-700 font-medium mb-2 text-sm"
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  >
+                    وش هدف المشروع؟ *
+                  </label>
+                  <textarea
+                    name="projectGoal"
+                    required
+                    value={formData.projectGoal}
+                    onChange={(e) => handleInputChange("projectGoal", e.target.value)}
+                    placeholder="تكلم عن فكرتك بإيجاز"
+                    rows={3}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right resize-none text-sm ${
+                      validationErrors.projectGoal
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    }`}
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  />
+                  {validationErrors.projectGoal && (
+                    <p
+                      className="text-red-500 text-xs mt-1 text-right"
+                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                    >
+                      {validationErrors.projectGoal}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    className="block text-gray-700 font-medium mb-3 text-sm"
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  >
+                    عندك هوية بصرية جاهزة؟ *
+                  </label>
+                  <div className="flex gap-4">
+                    {["نعم", "لا", "مو متأكد"].map((option) => (
+                      <label key={option} className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          name="hasIdentity"
+                          value={option}
+                          checked={formData.hasIdentity === option}
+                          onChange={(e) => handleInputChange("hasIdentity", e.target.value)}
+                          className="ml-2"
+                          required // جعل حقل الراديو مطلوبًا
+                        />
+                        <span className="text-sm" style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}>
+                          {option}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {validationErrors.hasIdentity && (
+                    <p
+                      className="text-red-500 text-xs mt-1 text-right"
+                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                    >
+                      {validationErrors.hasIdentity}
+                    </p>
+                  )}
+                </div>
+              </div>
 
               {/* Step 3: Budget & Timeline */}
-              {currentStep === 3 && (
-                <div className="space-y-4">
-                  <h3
-                    className="text-lg font-bold text-gray-800 mb-4"
+              <div
+                className="space-y-4 transition-all duration-300 ease-in-out"
+                style={{
+                  opacity: currentStep === 3 ? 1 : 0,
+                  height: currentStep === 3 ? "auto" : 0,
+                  overflow: currentStep === 3 ? "visible" : "hidden",
+                  position: currentStep === 3 ? "relative" : "absolute",
+                  width: "100%",
+                }}
+              >
+                <h3
+                  className="text-lg font-bold text-gray-800 mb-4"
+                  style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                >
+                  الميزانية والجدول الزمني
+                </h3>
+
+                <div>
+                  <label
+                    className="block text-gray-700 font-medium mb-2 text-sm"
                     style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                   >
-                    الميزانية والجدول الزمني
-                  </h3>
-
-                  <div>
-                    <label
-                      className="block text-gray-700 font-medium mb-2 text-sm"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    >
-                      ميزانيتك التقريبية؟
-                    </label>
-                    <select
-                      value={formData.budget}
-                      onChange={(e) => handleInputChange("budget", e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-right text-sm bg-white"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    >
-                      <option value="">اختر الميزانية</option>
-                      <option value="under-3000">أقل من ٣٠٠٠ ريال</option>
-                      <option value="3000-6000">٣٠٠٠ - ٦٠٠٠ ريال</option>
-                      <option value="6000-10000">٦٠٠٠ - ١٠٠٠٠ ريال</option>
-                      <option value="over-10000">أكثر من ١٠٠٠٠ ريال</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label
-                      className="block text-gray-700 font-medium mb-2 text-sm"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    >
-                      عندك وقت تسليم محدد؟
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.deadline}
-                      onChange={(e) => handleInputChange("deadline", e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-right text-sm"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Step 4: Additional Notes */}
-              {currentStep === 4 && (
-                <div className="space-y-4">
-                  <h3
-                    className="text-lg font-bold text-gray-800 mb-4"
+                    ميزانيتك التقريبية؟ *
+                  </label>
+                  <select
+                    name="budget"
+                    required
+                    value={formData.budget}
+                    onChange={(e) => handleInputChange("budget", e.target.value)}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm bg-white ${
+                      validationErrors.budget
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    }`}
                     style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                   >
-                    ملاحظات إضافية
-                  </h3>
-
-                  <div>
-                    <label
-                      className="block text-gray-700 font-medium mb-2 text-sm"
+                    <option value="">اختر الميزانية</option>
+                    <option value="under-3000">أقل من ٣٠٠٠ ريال</option>
+                    <option value="3000-6000">٣٠٠٠ - ٥٠٠٠ ريال</option>
+                    <option value="6000-10000">٥٠٠٠ - ١٠٠٠٠ ريال</option>
+                    <option value="over-10000">أكثر من ١٠٠٠٠ ريال</option>
+                  </select>
+                  {validationErrors.budget && (
+                    <p
+                      className="text-red-500 text-xs mt-1 text-right"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      تبغى تضيف ملاحظات أو روابط؟
-                    </label>
-                    <textarea
-                      value={formData.notes}
-                      onChange={(e) => handleInputChange("notes", e.target.value)}
-                      placeholder="أي ملاحظات إضافية أو متطلبات خاصة للمشروع"
-                      rows={4}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-right resize-none text-sm"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    />
-                  </div>
-
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4
-                      className="font-bold text-gray-800 mb-2"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    >
-                      ملخص الطلب:
-                    </h4>
-                    <div
-                      className="text-sm text-gray-600 space-y-1"
-                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                    >
-                      <p>
-                        <strong>الاسم:</strong> {formData.name}
-                      </p>
-                      <p>
-                        <strong>التواصل:</strong> {formData.contact}
-                      </p>
-                      <p>
-                        <strong>نوع الخدمة:</strong> {formData.serviceType}
-                      </p>
-                      {formData.projectGoal && (
-                        <p>
-                          <strong>هدف المشروع:</strong> {formData.projectGoal}
-                        </p>
-                      )}
-                      {formData.hasIdentity && (
-                        <p>
-                          <strong>هوية بصرية:</strong> {formData.hasIdentity}
-                        </p>
-                      )}
-                      {formData.budget && (
-                        <p>
-                          <strong>الميزانية:</strong> {formData.budget}
-                        </p>
-                      )}
-                      {formData.deadline && (
-                        <p>
-                          <strong>موعد التسليم:</strong> {formData.deadline}
-                        </p>
-                      )}
-                      {formData.notes && (
-                        <p>
-                          <strong>ملاحظات:</strong> {formData.notes}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                      {validationErrors.budget}
+                    </p>
+                  )}
                 </div>
+
+                <div>
+                  <label
+                    className="block text-gray-700 font-medium mb-2 text-sm"
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  >
+                    عندك وقت تسليم محدد؟ *
+                  </label>
+                  <input
+                    type="date"
+                    name="deadline"
+                    required
+                    value={formData.deadline}
+                    onChange={(e) => handleInputChange("deadline", e.target.value)}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm ${
+                      validationErrors.deadline
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    }`}
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  />
+                  {validationErrors.deadline && (
+                    <p
+                      className="text-red-500 text-xs mt-1 text-right"
+                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                    >
+                      {validationErrors.deadline}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    className="block text-gray-700 font-medium mb-2 text-sm"
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  >
+                    ملاحظات إضافية: *
+                  </label>
+                  <textarea
+                    name="notes"
+                    required
+                    value={formData.notes}
+                    onChange={(e) => handleInputChange("notes", e.target.value)}
+                    placeholder="أي تفاصيل إضافية تود ذكرها"
+                    rows={3}
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right resize-none text-sm ${
+                      validationErrors.notes
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    }`}
+                    style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                  />
+                  {validationErrors.notes && (
+                    <p
+                      className="text-red-500 text-xs mt-1 text-right"
+                      style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                    >
+                      {validationErrors.notes}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Display server-side error message if present and not successful */}
+              {state.message && !state.success && (
+                <p
+                  className="text-red-500 text-sm mt-4 text-center"
+                  style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+                >
+                  {state.message}
+                </p>
               )}
 
               {/* Navigation Buttons */}
@@ -678,14 +785,14 @@ export default function Component() {
                 ) : (
                   <button
                     type="submit"
-                    aria-disabled={isPending}
+                    aria-disabled={isPending || isTransitionPending}
                     className="px-6 py-3 text-white rounded-lg font-bold text-sm"
                     style={{
                       backgroundColor: isDarkMode ? "#242424" : "rgba(79,70,229,1)",
                       fontFamily: "'Expo Arabic', system-ui, sans-serif",
                     }}
                   >
-                    {isPending ? "جاري الإرسال..." : "أرسل الطلب ✨"}
+                    {isPending || isTransitionPending ? "جاري الإرسال..." : "أرسل الطلب ✨"}
                   </button>
                 )}
               </div>
@@ -771,10 +878,10 @@ export default function Component() {
               href="https://wa.me/966580079332"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 transition-colors duration-200 transform hover:scale-105 inline-flex items-center justify-center"
+              className="hover:text-blue-800 transition-colors duration-200 transform hover:scale-105 inline-flex items-center justify-center text-[rgba(79,70,229,1)]"
               style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
             >
-              كلمني واتس اب
+              تواصل معي واتس اب   
             </a>
           </div>
         </div>
@@ -828,7 +935,81 @@ export default function Component() {
                   className="text-black hover:scale-110 transition-transform duration-200"
                 >
                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3" />
+                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1-.4-1.48V9.69h2.31c0-.26.05-.52.15-.76.23-.66.66-1.26 1.3-1.67.53-.34 1.15-.52 1.79-.52.17 0 .33.01.49.04V2h3.45v.44c0 1.56.81 3.04 2.11 3.81.65.39 1.36.59 2.08.59h.18v4.85z" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Services Coming Soon Modal */}
+      {showServicesModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-auto text-center animate-in zoom-in-90 duration-300 relative">
+            <button
+              onClick={() => setShowServicesModal(false)}
+              className="absolute top-4 left-4 text-gray-400 hover:text-gray-600 transition-colors p-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-4xl mb-4">👩🏻‍💻</div>
+            <h3
+              className="text-xl font-bold text-gray-800 mb-4"
+              style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
+            >
+              قريب بضيف خدمات متنوعة
+            </h3>
+            <p className="text-gray-600 mb-6" style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}>
+              يعني ترقب✨ 
+            </p>
+
+            {/* Social Media Links */}
+            <div className="border-t pt-4">
+              <p className="text-gray-500 text-sm mb-4" style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}>
+                بتلاقيني هنا 
+              </p>
+              <div className="flex justify-center items-center gap-4">
+                <a
+                  href="https://instagram.com/anfal_star1"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-black hover:scale-110 transition-transform duration-200 p-2 rounded-full hover:bg-gray-50"
+                >
+                  <Instagram className="w-6 h-6" />
+                </a>
+
+                <a
+                  href="https://twitter.com/anfal_star1"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-black hover:scale-110 transition-transform duration-200 p-2 rounded-full hover:bg-gray-50"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </a>
+
+                <a
+                  href="https://tiktok.com/@anfal_star1"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-black hover:scale-110 transition-transform duration-200 p-2 rounded-full hover:bg-gray-50"
+                >
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" />
+                  </svg>
+                </a>
+
+                <a
+                  href="https://wa.me/966580079332"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-black hover:scale-110 transition-transform duration-200 p-2 rounded-full hover:bg-gray-50"
+                >
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488" />
                   </svg>
                 </a>
               </div>
