@@ -81,28 +81,42 @@ export default function Component() {
       case "serviceType":
         if (!value) error = "نوع الخدمة مطلوب."
         break
-      case "projectGoal":
-        if (!value.trim()) error = "هدف المشروع مطلوب."
-        break
-      case "hasIdentity":
-        if (!value) error = "هذا الحقل مطلوب."
-        break
-      case "budget":
-        if (!value) error = "الميزانية مطلوبة."
-        break
-      case "deadline":
-        if (!value) error = "موعد التسليم مطلوب."
-        break
-      case "notes":
-        if (!value.trim()) error = "الملاحظات مطلوبة."
-        break
       default:
         break
     }
     return error
   }
 
-  const validateCurrentStep = (): boolean => {
+  // دالة جديدة للتحقق من جميع الحقول الإلزامية قبل الإرسال النهائي
+  const validateAllRequiredFields = (): boolean => {
+    const errors: { [key: string]: string } = {}
+    let isValid = true
+
+    // حقول الخطوة 1
+    const nameError = validateField("name", formData.name)
+    if (nameError) {
+      errors.name = nameError
+      isValid = false
+    }
+    const contactError = validateField("contact", formData.contact)
+    if (contactError) {
+      errors.contact = contactError
+      isValid = false
+    }
+
+    // حقول الخطوة 2
+    const serviceTypeError = validateField("serviceType", formData.serviceType)
+    if (serviceTypeError) {
+      errors.serviceType = serviceTypeError
+      isValid = false
+    }
+
+    setValidationErrors(errors)
+    return isValid
+  }
+
+  const handleNext = () => {
+    // التحقق من صحة الحقول في الخطوة الحالية فقط للانتقال
     const errors: { [key: string]: string } = {}
     let isValid = true
 
@@ -123,54 +137,28 @@ export default function Component() {
         errors.serviceType = serviceTypeError
         isValid = false
       }
-      const projectGoalError = validateField("projectGoal", formData.projectGoal)
-      if (projectGoalError) {
-        errors.projectGoal = projectGoalError
-        isValid = false
-      }
-      const hasIdentityError = validateField("hasIdentity", formData.hasIdentity)
-      if (hasIdentityError) {
-        errors.hasIdentity = hasIdentityError
-        isValid = false
-      }
-    } else if (currentStep === 3) {
-      const budgetError = validateField("budget", formData.budget)
-      if (budgetError) {
-        errors.budget = budgetError
-        isValid = false
-      }
-      const deadlineError = validateField("deadline", formData.deadline)
-      if (deadlineError) {
-        errors.deadline = deadlineError
-        isValid = false
-      }
-    } else if (currentStep === 4) {
-      const notesError = validateField("notes", formData.notes)
-      if (notesError) {
-        errors.notes = notesError
-        isValid = false
-      }
     }
+    // لا حاجة للتحقق من الحقول الاختيارية هنا
 
     setValidationErrors(errors)
-    return isValid
-  }
 
-  const handleNext = () => {
-    if (validateCurrentStep()) {
+    if (isValid) {
       setCurrentStep(Math.min(totalSteps, currentStep + 1))
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (validateCurrentStep()) {
-      const data = new FormData()
-      for (const key in formData) {
-        data.append(key, formData[key as keyof typeof formData])
+  // تم تعديل هذه الدالة لتكون متزامنة وتتعامل مع التحقق من صحة العميل
+  const handleSubmit = (e: React.FormEvent) => {
+    if (!validateAllRequiredFields()) {
+      e.preventDefault() // منع إرسال النموذج إذا فشل التحقق من صحة العميل
+      // إذا كانت هناك أخطاء في الخطوة 1 أو 2، ارجع إلى تلك الخطوة
+      if (validationErrors.name || validationErrors.contact) {
+        setCurrentStep(1)
+      } else if (validationErrors.serviceType) {
+        setCurrentStep(2)
       }
-      await formAction(data)
     }
+    // إذا نجح التحقق، سيتم إرسال النموذج بشكل طبيعي إلى formAction
   }
 
   const handleInputChange = (field: keyof typeof formData, value: string) => {
@@ -370,7 +358,7 @@ export default function Component() {
             </div>
 
             {/* Modal Content */}
-            <form onSubmit={handleSubmit} className="p-6">
+            <form action={formAction} onSubmit={handleSubmit} className="p-6">
               {/* Step 1: Basic Info */}
               {currentStep === 1 && (
                 <div className="space-y-4">
@@ -386,14 +374,14 @@ export default function Component() {
                       className="block text-gray-700 font-medium mb-2 text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      الاسم *
+                      وش اسمك ؟ *
                     </label>
                     <input
                       type="text"
                       required
                       value={formData.name}
                       onChange={(e) => handleInputChange("name", e.target.value)}
-                      placeholder="اكتب اسمك"
+                      placeholder="مثلاً: سارة أو محمد"
                       className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm ${
                         validationErrors.name
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500"
@@ -416,14 +404,14 @@ export default function Component() {
                       className="block text-gray-700 font-medium mb-2 text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      طريقة التواصل *
+                      كيف أقدر أتواصل معك؟ *
                     </label>
                     <input
                       type="text"
                       required
                       value={formData.contact}
                       onChange={(e) => handleInputChange("contact", e.target.value)}
-                      placeholder="example@email.com أو 0501234567"
+                      placeholder="إيميلك أو رقم الواتساب"
                       className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm ${
                         validationErrors.contact
                           ? "border-red-500 focus:border-red-500 focus:ring-red-500"
@@ -458,7 +446,7 @@ export default function Component() {
                       className="block text-gray-700 font-medium mb-2 text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      نوع الخدمة *
+                      وش نوع الخدمة اللي تحتاجها؟ *
                     </label>
                     <select
                       required
@@ -472,11 +460,11 @@ export default function Component() {
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
                       <option value="">اختر نوع الخدمة</option>
-                      <option value="mobile-app">تصميم تطبيق جوال</option>
-                      <option value="website">تصميم موقع إلكتروني</option>
-                      <option value="ux-improvement">تحسين تجربة المستخدم</option>
-                      <option value="single-page">تصميم صفحة واحدة</option>
-                      <option value="consultation">استشارة تصميم</option>
+                      <option value="mobile-app-ui">تصميم واجهة تطبيق (موبايل)</option>
+                      <option value="website-ui">تصميم واجهة موقع إلكتروني</option>
+                      <option value="ux-improvement">تحسين تجربة مستخدم لمشروعك</option>
+                      <option value="single-screen-design">تصميم شاشة وحدة (Landing page أو Dashboard)</option>
+                      <option value="not-sure-talk-first">مو عارف بالضبط.. نحتاج نتكلم أول</option>
                     </select>
                     {validationErrors.serviceType && (
                       <p
@@ -493,29 +481,16 @@ export default function Component() {
                       className="block text-gray-700 font-medium mb-2 text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      هدف المشروع *
+                      وش هدف المشروع؟
                     </label>
                     <textarea
-                      required
                       value={formData.projectGoal}
                       onChange={(e) => handleInputChange("projectGoal", e.target.value)}
-                      placeholder="وصف مختصر للمشروع"
+                      placeholder="تكلم عن فكرتك بإيجاز (اختياري)"
                       rows={3}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right resize-none text-sm ${
-                        validationErrors.projectGoal
-                          ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      }`}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-right resize-none text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     />
-                    {validationErrors.projectGoal && (
-                      <p
-                        className="text-red-500 text-xs mt-1 text-right"
-                        style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                      >
-                        {validationErrors.projectGoal}
-                      </p>
-                    )}
                   </div>
 
                   <div>
@@ -523,10 +498,10 @@ export default function Component() {
                       className="block text-gray-700 font-medium mb-3 text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      هل لديك هوية بصرية؟ *
+                      عندك هوية بصرية جاهزة؟
                     </label>
                     <div className="flex gap-4">
-                      {["نعم", "لا", "غير متأكد"].map((option) => (
+                      {["نعم", "لا", "مو متأكد"].map((option) => (
                         <label key={option} className="flex items-center cursor-pointer">
                           <input
                             type="radio"
@@ -535,7 +510,6 @@ export default function Component() {
                             checked={formData.hasIdentity === option}
                             onChange={(e) => handleInputChange("hasIdentity", e.target.value)}
                             className="ml-2"
-                            required
                           />
                           <span className="text-sm" style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}>
                             {option}
@@ -543,14 +517,6 @@ export default function Component() {
                         </label>
                       ))}
                     </div>
-                    {validationErrors.hasIdentity && (
-                      <p
-                        className="text-red-500 text-xs mt-1 text-right"
-                        style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                      >
-                        {validationErrors.hasIdentity}
-                      </p>
-                    )}
                   </div>
                 </div>
               )}
@@ -570,33 +536,20 @@ export default function Component() {
                       className="block text-gray-700 font-medium mb-2 text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      الميزانية *
+                      ميزانيتك التقريبية؟
                     </label>
                     <select
-                      required
                       value={formData.budget}
                       onChange={(e) => handleInputChange("budget", e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm bg-white ${
-                        validationErrors.budget
-                          ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      }`}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-right text-sm bg-white"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
                       <option value="">اختر الميزانية</option>
                       <option value="under-3000">أقل من ٣٠٠٠ ريال</option>
-                      <option value="3000-6000">٣٠٠٠ - ٥٠٠٠ ريال</option>
-                      <option value="6000-10000">٥٠٠٠ - ١٠٠٠٠ ريال</option>
+                      <option value="3000-6000">٣٠٠٠ - ٦٠٠٠ ريال</option>
+                      <option value="6000-10000">٦٠٠٠ - ١٠٠٠٠ ريال</option>
                       <option value="over-10000">أكثر من ١٠٠٠٠ ريال</option>
                     </select>
-                    {validationErrors.budget && (
-                      <p
-                        className="text-red-500 text-xs mt-1 text-right"
-                        style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                      >
-                        {validationErrors.budget}
-                      </p>
-                    )}
                   </div>
 
                   <div>
@@ -604,28 +557,15 @@ export default function Component() {
                       className="block text-gray-700 font-medium mb-2 text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      موعد التسليم المطلوب *
+                      عندك وقت تسليم محدد؟
                     </label>
                     <input
                       type="date"
-                      required
                       value={formData.deadline}
                       onChange={(e) => handleInputChange("deadline", e.target.value)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right text-sm ${
-                        validationErrors.deadline
-                          ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      }`}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-right text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     />
-                    {validationErrors.deadline && (
-                      <p
-                        className="text-red-500 text-xs mt-1 text-right"
-                        style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                      >
-                        {validationErrors.deadline}
-                      </p>
-                    )}
                   </div>
                 </div>
               )}
@@ -645,29 +585,16 @@ export default function Component() {
                       className="block text-gray-700 font-medium mb-2 text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     >
-                      ملاحظات أو متطلبات خاصة *
+                      تبغى تضيف ملاحظات أو روابط؟
                     </label>
                     <textarea
-                      required
                       value={formData.notes}
                       onChange={(e) => handleInputChange("notes", e.target.value)}
                       placeholder="أي ملاحظات إضافية أو متطلبات خاصة للمشروع"
                       rows={4}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-1 text-right resize-none text-sm ${
-                        validationErrors.notes
-                          ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                          : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      }`}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-right resize-none text-sm"
                       style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                     />
-                    {validationErrors.notes && (
-                      <p
-                        className="text-red-500 text-xs mt-1 text-right"
-                        style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
-                      >
-                        {validationErrors.notes}
-                      </p>
-                    )}
                   </div>
 
                   <div className="bg-blue-50 p-4 rounded-lg">
@@ -690,21 +617,31 @@ export default function Component() {
                       <p>
                         <strong>نوع الخدمة:</strong> {formData.serviceType}
                       </p>
-                      <p>
-                        <strong>هدف المشروع:</strong> {formData.projectGoal}
-                      </p>
-                      <p>
-                        <strong>هوية بصرية:</strong> {formData.hasIdentity}
-                      </p>
-                      <p>
-                        <strong>الميزانية:</strong> {formData.budget}
-                      </p>
-                      <p>
-                        <strong>موعد التسليم:</strong> {formData.deadline}
-                      </p>
-                      <p>
-                        <strong>ملاحظات:</strong> {formData.notes}
-                      </p>
+                      {formData.projectGoal && (
+                        <p>
+                          <strong>هدف المشروع:</strong> {formData.projectGoal}
+                        </p>
+                      )}
+                      {formData.hasIdentity && (
+                        <p>
+                          <strong>هوية بصرية:</strong> {formData.hasIdentity}
+                        </p>
+                      )}
+                      {formData.budget && (
+                        <p>
+                          <strong>الميزانية:</strong> {formData.budget}
+                        </p>
+                      )}
+                      {formData.deadline && (
+                        <p>
+                          <strong>موعد التسليم:</strong> {formData.deadline}
+                        </p>
+                      )}
+                      {formData.notes && (
+                        <p>
+                          <strong>ملاحظات:</strong> {formData.notes}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -742,13 +679,13 @@ export default function Component() {
                   <button
                     type="submit"
                     aria-disabled={isPending}
-                    className="px-6 py-3 text-white rounded-lg font-medium transition-colors hover:bg-blue-700 text-sm"
+                    className="px-6 py-3 text-white rounded-lg font-bold text-sm"
                     style={{
                       backgroundColor: isDarkMode ? "#242424" : "rgba(79,70,229,1)",
                       fontFamily: "'Expo Arabic', system-ui, sans-serif",
                     }}
                   >
-                    {isPending ? "جاري الإرسال..." : "إرسال الطلب"}
+                    {isPending ? "جاري الإرسال..." : "أرسل الطلب ✨"}
                   </button>
                 )}
               </div>

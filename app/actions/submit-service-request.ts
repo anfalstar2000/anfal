@@ -2,32 +2,32 @@
 
 import { createClient } from "@supabase/supabase-js"
 
-// Define the shape of the form data
+// Define the shape of the form data with optional fields as string | null
 interface ServiceRequestData {
   name: string
   contact: string
   serviceType: string
-  projectGoal: string
-  hasIdentity: string
-  budget: string
-  deadline: string
-  notes: string
+  projectGoal: string | null // أصبح اختياريًا
+  hasIdentity: string | null // أصبح اختياريًا
+  budget: string | null // أصبح اختياريًا
+  deadline: string | null // أصبح اختياريًا
+  notes: string | null // أصبح اختياريًا
 }
 
 // قم بتغيير توقيع الدالة لاستقبال الحالة السابقة وكائن FormData
 export async function submitServiceRequest(previousState: any, formData: FormData) {
   console.log("Server action 'submitServiceRequest' called.")
-  console.log("Previous state (from useActionState):", previousState) // هذا سيكون { success: false, message: '' }
+  console.log("Previous state (from useActionState):", previousState)
 
   // استخراج البيانات من كائن FormData
   const name = formData.get("name") as string
   const contact = formData.get("contact") as string
   const serviceType = formData.get("serviceType") as string
-  const projectGoal = formData.get("projectGoal") as string
-  const hasIdentity = formData.get("hasIdentity") as string
-  const budget = formData.get("budget") as string
-  const deadline = formData.get("deadline") as string
-  const notes = formData.get("notes") as string
+  const projectGoal = (formData.get("projectGoal") as string) || null // أصبح اختياريًا
+  const hasIdentity = (formData.get("hasIdentity") as string) || null // أصبح اختياريًا
+  const budget = (formData.get("budget") as string) || null // أصبح اختياريًا
+  const deadline = (formData.get("deadline") as string) || null // أصبح اختياريًا
+  const notes = (formData.get("notes") as string) || null // أصبح اختياريًا
 
   const requestData: ServiceRequestData = {
     name,
@@ -40,7 +40,7 @@ export async function submitServiceRequest(previousState: any, formData: FormDat
     notes,
   }
 
-  console.log("Extracted form data:", requestData) // هذا سيعرض البيانات الفعلية للنموذج
+  console.log("Extracted form data:", requestData)
 
   // Ensure Supabase environment variables are set
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -62,14 +62,14 @@ export async function submitServiceRequest(previousState: any, formData: FormDat
     // Insert data into the service_requests table
     const { data, error } = await supabase.from("service_requests").insert([
       {
-        name: requestData.name, // تم التغيير هنا
-        contact: requestData.contact, // تم التغيير هنا
-        service_type: requestData.serviceType, // تم التغيير هنا
-        project_goal: requestData.projectGoal, // تم التغيير هنا
-        has_identity: requestData.hasIdentity, // تم التغيير هنا
-        budget: requestData.budget, // تم التغيير هنا
-        deadline: requestData.deadline || null, // تم التغيير هنا
-        notes: requestData.notes, // تم التغيير هنا
+        name: requestData.name,
+        contact: requestData.contact,
+        service_type: requestData.serviceType,
+        project_goal: requestData.projectGoal, // سيتم إرسال null إذا كان فارغًا
+        has_identity: requestData.hasIdentity, // سيتم إرسال null إذا كان فارغًا
+        budget: requestData.budget, // سيتم إرسال null إذا كان فارغًا
+        deadline: requestData.deadline, // سيتم إرسال null إذا كان فارغًا
+        notes: requestData.notes, // سيتم إرسال null إذا كان فارغًا
       },
     ])
 
