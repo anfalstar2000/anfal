@@ -701,7 +701,7 @@ export default function Component() {
                     style={{ fontFamily: "'Expo Arabic', system-ui, sans-serif" }}
                   >
                     <option value="">اختر الميزانية</option>
-                    <option value="under-3000">أقل من ٣٠٠٠ ريال</option>
+                    <option value="3000">٣٠٠٠ ريال</option>
                     <option value="3000-6000">٣٠٠٠ - ٥٠٠٠ ريال</option>
                     <option value="6000-10000">٥٠٠٠ - ١٠٠٠٠ ريال</option>
                     <option value="over-10000">أكثر من ١٠٠٠٠ ريال</option>
